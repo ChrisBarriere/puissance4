@@ -1,0 +1,13 @@
+.git
+docker_image/
+node_modules/
+public/
+src/
+.editorconfig
+.gitignore
+babel.config.js
+logo.png
+package.json
+Readme.md
+vue.config.js
+yarn.lock
