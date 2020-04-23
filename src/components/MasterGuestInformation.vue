@@ -15,10 +15,6 @@
         <span class="text-h5 text-grey-9 text-bold">En attente d'un invité...</span>
       </div>
     </div>
-    <div v-if="connected" class="q-ma-md">
-      <q-icon name="mdi-emoticon-cool-outline" class="text-orange q-ml-xs q-mr-xs" size="sm" />
-      <span class="text-caption text-black text-bold">Votre invité est connecté !!!</span>
-    </div>
   </div>
 </template>
 

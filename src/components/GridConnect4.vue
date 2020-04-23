@@ -40,8 +40,8 @@ export default {
     },
   },
   methods: {
-    cellClasses(col, cell, value) {
-      const isADiskWinner = this.disksWinner.find((disk) => disk.col === col && disk.cell === cell);
+    cellClasses(col, row, value) {
+      const isADiskWinner = this.disksWinner.find((disk) => disk.col === col && disk.row === row);
       return `cell ${value}${isADiskWinner ? ' winner' : ''}`;
     },
   },
@@ -51,6 +51,8 @@ export default {
 <!-- eslint-disable -->
 <style lang="stylus" scoped>
 #grid
+  z-index 1000
+  position relative
   display flex
   margin auto
   border 15px solid #007fff
@@ -67,10 +69,8 @@ export default {
 #grid .cell
   width 60px
   height 60px
-#grid .cell.yellow.winner, #grid .cell.red.winner
-  border 1px solid orange;
 #grid .cell.empty
-  color: #fff
+  color #fff
   transition opacity 0.2s, top 0s 0.2s, color 0s 0.2s
 #grid .cell.yellow
   background radial-gradient(circle, currentcolor 12px, #666 13px, currentcolor 14px, currentcolor 21px, #666 22px, transparent 23px, transparent) center/60px
@@ -82,6 +82,12 @@ export default {
   transition top 0.32s cubic-bezier(0.56, 0, 1, 1)
   color #ff010b
   opacity 1
+#grid .cell.winner
+  -webkit-animation blink_winner_disks 1s infinite
+  -moz-animation blink_winner_disks 1s infinite
+  -o-animation blink_winner_disks 1s infinite
+  animation blink_winner_disks 1s infinite
+
 #playRow
   display flex
   margin auto
@@ -90,20 +96,35 @@ export default {
   height 90px
   box-sizing border-box
 .cellPlayRow
+  z-index 500
+  position relative
   width 60px
   height 60px
+  background radial-gradient(circle, currentcolor 12px, #666 13px, currentcolor 14px, currentcolor 21px, #666 22px, transparent 23px, transparent) center/60px
+  color rgba(76, 175, 80, 0.3)
   &:hover
     cursor pointer
+    bottom -30px
+    -webkit-animation move_playing_disk 1s
+    -moz-animation move_playing_disk 1s
+    -o-animation move_playing_disk 1s
+    animation move_playing_disk 1s
 .cellPlayRow.yellow
   &:hover
-    background radial-gradient(circle, currentcolor 12px, #666 13px, currentcolor 14px, currentcolor 21px, #666 22px, transparent 23px, transparent) center/60px
-    transition top 0.32s cubic-bezier(0.56, 0, 1, 1)
     color #ffd918
-    opacity 1
 .cellPlayRow.red
   &:hover
-    background radial-gradient(circle, currentcolor 12px, #666 13px, currentcolor 14px, currentcolor 21px, #666 22px, transparent 23px, transparent) center/60px
-    transition top 0.32s cubic-bezier(0.56, 0, 1, 1)
     color #ff010b
-    opacity 1
+
+@keyframes move_playing_disk
+  0%
+    transform translateY(-30px)
+  100%
+    transform translateY(0)
+
+@keyframes blink_winner_disks
+  0%, 49%
+    background transparent
+  50%, 100%
+    background radial-gradient(circle, currentcolor 12px, #666 13px, currentcolor 14px, currentcolor 21px, #666 22px, transparent 23px, transparent) center/60px
 </style>

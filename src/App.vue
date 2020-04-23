@@ -8,17 +8,20 @@
       @guest-selected="onGuestSelected"
     />
 
+    <!-- Information sur la table  -->
+    <table-information
+      v-if="peering.id"
+      :peeringId="peering.id"
+      :guestOrMaster="peering.guestOrMaster"
+      :guestConnected="peering.guestConnected"
+      @exit-table="exitTable"
+      @close-table="closeTable"
+    />
+
     <!------------------ BEGIN MASTER ------------------------------------->
     <!-- Création de la table par l'organisateur -->
     <master-table-creation
       v-if="peering.guestOrMaster === 'master' && !peering.id"
-    />
-    <!-- Information sur la table pour l'organisateur -->
-    <table-information
-      v-if="peering.guestOrMaster === 'master' && peering.id"
-      :peeringId="peering.id"
-      :guestOrMaster="peering.guestOrMaster"
-      @close-table="closeTable"
     />
     <!-- Information de connexion de l'invité pour l'organisateur -->
     <master-guest-information
@@ -36,16 +39,9 @@
       :peeringId="peering.id"
       :errorConnection="peering.guestErrorConnection"
     />
-    <!-- Information sur la table pour l'invité -->
-    <table-information
-      v-if="peering.guestOrMaster === 'guest' && peering.id && peering.guestConnected"
-      :peeringId="peering.id"
-      :guestOrMaster="peering.guestOrMaster"
-      @exit-table="exitTable"
-    />
     <!------------------ END GUEST ---------------------------------------->
 
-
+    <!-- Contrôle du jeu et grille -->
     <div id="gridAndControls">
       <!-- Contrôle de la partie -->
       <game-controls
@@ -70,6 +66,13 @@
       />
     </div>
 
+    <audio ref="soundCreationConnection" src="./assets/creation_connection_table.mp3" preload="auto" controls="none" style="display: none;"></audio>
+    <audio ref="soundExit" src="./assets/exit.mp3" preload="auto" controls="none" style="display: none;"></audio>
+    <audio ref="soundGuestArrived" src="./assets/guest_arrived.mp3" preload="auto" controls="none" style="display: none;"></audio>
+    <audio ref="soundNewGame" src="./assets/new_game.mp3" preload="auto" controls="none" style="display: none;"></audio>
+    <audio ref="soundSuccess" src="./assets/success.mp3" preload="auto" controls="none" style="display: none;"></audio>
+    <audio ref="soundFailure" src="./assets/failure.mp3" preload="auto" controls="none" style="display: none;"></audio>
+    <audio ref="soundNewDisk" src="./assets/new_disk.mp3" preload="auto" controls="none" style="display: none;"></audio>
   </div>
 </template>
 
@@ -136,6 +139,7 @@ export default {
         } else {
           this.peering.id = this.peering.peer.id;
         }
+        this.$refs.soundCreationConnection.play();
         console.log('Connection Open. Awaiting', this.peering.peer.id);
       });
       this.peering.peer.on('connection', (connection) => {
@@ -176,6 +180,7 @@ export default {
     },
     closeTable() {
       if (this.peering.guestConnected) this.peering.connection.send({ code: 'masterCloseTable' });
+      this.$refs.soundExit.play();
       this.peering = {
         guestOrMaster: null,
         id: null,
@@ -195,22 +200,27 @@ export default {
     },
     exitTable() {
       this.peering.connection.send({ code: 'guestExitTable' });
-      this.peering = {
-        guestOrMaster: null,
-        id: null,
-        peer: null,
-        connection: null,
-        guestConnected: false,
-        guestErrorConnection: false,
-      };
-      this.game = {
-        started: false,
-        colorWinner: null,
-        counterRedDisks: null,
-        counterYellowDisks: null,
-        playingColor: null,
-        grid: null,
-      };
+      this.peering.guestOrMaster = null;
+      setTimeout(() => {
+        this.$refs.soundExit.play();
+        this.peering.connection.close();
+        this.peering = {
+          guestOrMaster: null,
+          id: null,
+          peer: null,
+          connection: null,
+          guestConnected: false,
+          guestErrorConnection: false,
+        };
+        this.game = {
+          started: false,
+          colorWinner: null,
+          counterRedDisks: null,
+          counterYellowDisks: null,
+          playingColor: null,
+          grid: null,
+        };
+      }, 1000);
     },
     setMasterPeerId(id) {
       this.peering.id = id;
@@ -253,6 +263,7 @@ export default {
         { reliable: true });
       this.peering.connection.on('open', () => {
         console.log('Connected to', this.peering.connection.peer);
+        this.$refs.soundCreationConnection.play();
         this.peering.connection.send({ code: 'guestConnected' });
         this.peering.guestConnected = true;
       });
@@ -270,9 +281,13 @@ export default {
       });
     },
     analyseDataReceived(data) {
-      if (data.code === 'guestConnected' && this.peering.guestOrMaster === 'master') this.peering.guestConnected = true;
+      if (data.code === 'guestConnected' && this.peering.guestOrMaster === 'master') {
+        this.$refs.soundGuestArrived.play();
+        this.peering.guestConnected = true;
+      }
       if (data.code === 'newGame' && this.peering.guestOrMaster === 'guest') {
         this.game = data.game;
+        this.$refs.soundNewGame.play();
       }
       if (data.code === 'newDisc') this.putNewDisc(data.col, true);
       if (data.code === 'masterCloseTable') {
@@ -283,6 +298,7 @@ export default {
           progress: true,
           position: 'top',
         });
+        this.$refs.soundExit.play();
         this.peering = {
           guestOrMaster: null,
           id: null,
@@ -308,6 +324,7 @@ export default {
           progress: true,
           position: 'top',
         });
+        this.$refs.soundExit.play();
         this.peering.guestConnected = false;
         this.game = {
           started: false,
@@ -323,8 +340,8 @@ export default {
       this.game.grid = {};
       for (let indexCol = 1; indexCol < 8; indexCol += 1) {
         this.game.grid[`col${indexCol}`] = {};
-        for (let indexCell = 6; indexCell > 0; indexCell -= 1) {
-          this.game.grid[`col${indexCol}`][`cell${indexCell}`] = 'empty';
+        for (let indexRow = 6; indexRow > 0; indexRow -= 1) {
+          this.game.grid[`col${indexCol}`][`row${indexRow}`] = 'empty';
         }
       }
       this.game.started = true;
@@ -333,14 +350,15 @@ export default {
       this.game.counterRedDisks = 21;
       this.game.counterYellowDisks = 21;
       this.game.playingColor = Math.random() < 0.5 ? 'yellow' : 'red';
+      this.$refs.soundNewGame.play();
       this.peering.connection.send({ code: 'newGame', game: this.game });
     },
     putNewDisc(col, replayForOtherPlayer) {
       let newDisc = false;
-      for (let indexCell = 1; indexCell < 7; indexCell += 1) {
-        if (this.game.grid[col][`cell${indexCell}`] === 'empty') {
-          this.game.grid[col][`cell${indexCell}`] = this.game.playingColor;
-          newDisc = { col, row: `row${indexCell}`, color: this.game.playingColor };
+      for (let indexRow = 1; indexRow < 7; indexRow += 1) {
+        if (this.game.grid[col][`row${indexRow}`] === 'empty') {
+          this.game.grid[col][`row${indexRow}`] = this.game.playingColor;
+          newDisc = { col, row: `row${indexRow}`, color: this.game.playingColor };
           break;
         }
       }
@@ -355,9 +373,7 @@ export default {
         return;
       }
       if (newDisc) {
-        // this.checkGrid('yellow');
-        // this.checkGrid('red');
-        const winner = this.checkGrid2(newDisc);
+        const winner = this.checkGrid(newDisc);
         if (winner.status) {
           this.game.colorWinner = this.game.playingColor;
           this.game.disksWinner = winner.disks;
@@ -365,11 +381,30 @@ export default {
         this.game.counterRedDisks -= this.game.playingColor === 'red' ? 1 : 0;
         this.game.counterYellowDisks -= this.game.playingColor === 'yellow' ? 1 : 0;
         this.game.playingColor = this.game.playingColor === 'yellow' ? 'red' : 'yellow';
+
+        if (this.game.colorWinner === 'yellow') {
+          if (this.peering.guestOrMaster === 'master') {
+            this.$refs.soundSuccess.play();
+          }
+          if (this.peering.guestOrMaster === 'guest') {
+            this.$refs.soundFailure.play();
+          }
+        }
+        if (this.game.colorWinner === 'red') {
+          if (this.peering.guestOrMaster === 'guest') {
+            this.$refs.soundSuccess.play();
+          }
+          if (this.peering.guestOrMaster === 'master') {
+            this.$refs.soundFailure.play();
+          }
+        }
+
+        this.$refs.soundNewDisk.play();
         if (replayForOtherPlayer) return;
         this.peering.connection.send({ code: 'newDisc', col });
       }
     },
-    checkGrid2(disk) {
+    checkGrid(disk) {
       const checkDirection = (direction, diskIndexCol, diskIndexRow, diskColor) => {
         const incrementeIndexRow = (index, verticalDirection) => {
           if (verticalDirection === 'top') return index + 1;
@@ -398,9 +433,9 @@ export default {
         let indexCol = incrementeIndexCol(diskIndexCol, direction.horizontal);
         let indexRow = incrementeIndexRow(diskIndexRow, direction.vertical);
         while (condition(indexCol, indexRow, direction.horizontal, direction.vertical)) {
-          if (this.game.grid[`col${indexCol}`][`cell${indexRow}`] !== diskColor) break;
+          if (this.game.grid[`col${indexCol}`][`row${indexRow}`] !== diskColor) break;
           count += 1;
-          disks = [...disks, { col: `col${indexCol}`, cell: `cell${indexRow}` }];
+          disks = [...disks, { col: `col${indexCol}`, row: `row${indexRow}` }];
           indexCol = incrementeIndexCol(indexCol, direction.horizontal);
           indexRow = incrementeIndexRow(indexRow, direction.vertical);
         }
@@ -424,165 +459,25 @@ export default {
       // vertical
       if (1 + topCheck.count + bottomCheck.count > 3) {
         winner.status = true;
-        winner.disks = [...winner.disks, ...topCheck.disks, { col: `col${diskIndexCol}`, cell: `cell${diskIndexRow}` }, ...bottomCheck.disks];
+        winner.disks = [...winner.disks, ...topCheck.disks, { col: `col${diskIndexCol}`, row: `row${diskIndexRow}` }, ...bottomCheck.disks];
       }
       // horizontal
       if (1 + leftCheck.count + rightCheck.count > 3) {
         winner.status = true;
-        winner.disks = [...winner.disks, ...leftCheck.disks, { col: `col${diskIndexCol}`, cell: `cell${diskIndexRow}` }, ...rightCheck.disks];
+        winner.disks = [...winner.disks, ...leftCheck.disks, { col: `col${diskIndexCol}`, row: `row${diskIndexRow}` }, ...rightCheck.disks];
       }
       // diag top-right to bottom-left
       if (1 + topRightCheck.count + bottomLeftCheck.count > 3) {
         winner.status = true;
-        winner.disks = [...winner.disks, ...topRightCheck.disks, { col: `col${diskIndexCol}`, cell: `cell${diskIndexRow}` }, ...bottomLeftCheck.disks];
+        winner.disks = [...winner.disks, ...topRightCheck.disks, { col: `col${diskIndexCol}`, row: `row${diskIndexRow}` }, ...bottomLeftCheck.disks];
       }
       // diag top-left to bottom-right
       if (1 + topLeftCheck.count + bottomRightCheck.count > 3) {
         winner.status = true;
-        winner.disks = [...winner.disks, ...topLeftCheck.disks, { col: `col${diskIndexCol}`, cell: `cell${diskIndexRow}` }, ...bottomRightCheck.disks];
+        winner.disks = [...winner.disks, ...topLeftCheck.disks, { col: `col${diskIndexCol}`, row: `row${diskIndexRow}` }, ...bottomRightCheck.disks];
       }
 
       return winner;
-    },
-    checkGrid(color) {
-      if (this.game.grid.col1.cell1 === color && this.game.grid.col2.cell1 === color
-        && this.game.grid.col3.cell1 === color && this.game.grid.col4.cell1 === color) this.game.colorWinner = color;
-      if (this.game.grid.col2.cell1 === color && this.game.grid.col3.cell1 === color
-        && this.game.grid.col4.cell1 === color && this.game.grid.col5.cell1 === color) this.game.colorWinner = color;
-      if (this.game.grid.col3.cell1 === color && this.game.grid.col4.cell1 === color
-        && this.game.grid.col5.cell1 === color && this.game.grid.col6.cell1 === color) this.game.colorWinner = color;
-      if (this.game.grid.col4.cell1 === color && this.game.grid.col5.cell1 === color
-        && this.game.grid.col6.cell1 === color && this.game.grid.col7.cell1 === color) this.game.colorWinner = color;
-      if (this.game.grid.col1.cell2 === color && this.game.grid.col2.cell2 === color
-        && this.game.grid.col3.cell2 === color && this.game.grid.col4.cell2 === color) this.game.colorWinner = color;
-      if (this.game.grid.col2.cell2 === color && this.game.grid.col3.cell2 === color
-        && this.game.grid.col4.cell2 === color && this.game.grid.col5.cell2 === color) this.game.colorWinner = color;
-      if (this.game.grid.col3.cell2 === color && this.game.grid.col4.cell2 === color
-        && this.game.grid.col5.cell2 === color && this.game.grid.col6.cell2 === color) this.game.colorWinner = color;
-      if (this.game.grid.col4.cell2 === color && this.game.grid.col5.cell2 === color
-        && this.game.grid.col6.cell2 === color && this.game.grid.col7.cell2 === color) this.game.colorWinner = color;
-      if (this.game.grid.col1.cell3 === color && this.game.grid.col2.cell3 === color
-        && this.game.grid.col3.cell3 === color && this.game.grid.col4.cell3 === color) this.game.colorWinner = color;
-      if (this.game.grid.col2.cell3 === color && this.game.grid.col3.cell3 === color
-        && this.game.grid.col4.cell3 === color && this.game.grid.col5.cell3 === color) this.game.colorWinner = color;
-      if (this.game.grid.col3.cell3 === color && this.game.grid.col4.cell3 === color
-        && this.game.grid.col5.cell3 === color && this.game.grid.col6.cell3 === color) this.game.colorWinner = color;
-      if (this.game.grid.col4.cell3 === color && this.game.grid.col5.cell3 === color
-        && this.game.grid.col6.cell3 === color && this.game.grid.col7.cell3 === color) this.game.colorWinner = color;
-      if (this.game.grid.col1.cell4 === color && this.game.grid.col2.cell4 === color
-        && this.game.grid.col3.cell4 === color && this.game.grid.col4.cell4 === color) this.game.colorWinner = color;
-      if (this.game.grid.col2.cell4 === color && this.game.grid.col3.cell4 === color
-        && this.game.grid.col4.cell4 === color && this.game.grid.col5.cell4 === color) this.game.colorWinner = color;
-      if (this.game.grid.col3.cell4 === color && this.game.grid.col4.cell4 === color
-        && this.game.grid.col5.cell4 === color && this.game.grid.col6.cell4 === color) this.game.colorWinner = color;
-      if (this.game.grid.col4.cell4 === color && this.game.grid.col5.cell4 === color
-        && this.game.grid.col6.cell4 === color && this.game.grid.col7.cell4 === color) this.game.colorWinner = color;
-      if (this.game.grid.col1.cell5 === color && this.game.grid.col2.cell5 === color
-        && this.game.grid.col3.cell5 === color && this.game.grid.col4.cell5 === color) this.game.colorWinner = color;
-      if (this.game.grid.col2.cell5 === color && this.game.grid.col3.cell5 === color
-        && this.game.grid.col4.cell5 === color && this.game.grid.col5.cell5 === color) this.game.colorWinner = color;
-      if (this.game.grid.col3.cell5 === color && this.game.grid.col4.cell5 === color
-        && this.game.grid.col5.cell5 === color && this.game.grid.col6.cell5 === color) this.game.colorWinner = color;
-      if (this.game.grid.col4.cell5 === color && this.game.grid.col5.cell5 === color
-        && this.game.grid.col6.cell5 === color && this.game.grid.col7.cell5 === color) this.game.colorWinner = color;
-      if (this.game.grid.col1.cell6 === color && this.game.grid.col2.cell6 === color
-        && this.game.grid.col3.cell6 === color && this.game.grid.col4.cell6 === color) this.game.colorWinner = color;
-      if (this.game.grid.col2.cell6 === color && this.game.grid.col3.cell6 === color
-        && this.game.grid.col4.cell6 === color && this.game.grid.col5.cell6 === color) this.game.colorWinner = color;
-      if (this.game.grid.col3.cell6 === color && this.game.grid.col4.cell6 === color
-        && this.game.grid.col5.cell6 === color && this.game.grid.col6.cell6 === color) this.game.colorWinner = color;
-      if (this.game.grid.col4.cell6 === color && this.game.grid.col5.cell6 === color
-        && this.game.grid.col6.cell6 === color && this.game.grid.col7.cell6 === color) this.game.colorWinner = color;
-      if (this.game.grid.col1.cell1 === color && this.game.grid.col1.cell2 === color
-        && this.game.grid.col1.cell3 === color && this.game.grid.col1.cell4 === color) this.game.colorWinner = color;
-      if (this.game.grid.col1.cell2 === color && this.game.grid.col1.cell3 === color
-        && this.game.grid.col1.cell4 === color && this.game.grid.col1.cell5 === color) this.game.colorWinner = color;
-      if (this.game.grid.col1.cell3 === color && this.game.grid.col1.cell4 === color
-        && this.game.grid.col1.cell5 === color && this.game.grid.col1.cell6 === color) this.game.colorWinner = color;
-      if (this.game.grid.col2.cell1 === color && this.game.grid.col2.cell2 === color
-        && this.game.grid.col2.cell3 === color && this.game.grid.col2.cell4 === color) this.game.colorWinner = color;
-      if (this.game.grid.col2.cell2 === color && this.game.grid.col2.cell3 === color
-        && this.game.grid.col2.cell4 === color && this.game.grid.col2.cell5 === color) this.game.colorWinner = color;
-      if (this.game.grid.col2.cell3 === color && this.game.grid.col2.cell4 === color
-        && this.game.grid.col2.cell5 === color && this.game.grid.col2.cell6 === color) this.game.colorWinner = color;
-      if (this.game.grid.col3.cell1 === color && this.game.grid.col3.cell2 === color
-        && this.game.grid.col3.cell3 === color && this.game.grid.col3.cell4 === color) this.game.colorWinner = color;
-      if (this.game.grid.col3.cell2 === color && this.game.grid.col3.cell3 === color
-        && this.game.grid.col3.cell4 === color && this.game.grid.col3.cell5 === color) this.game.colorWinner = color;
-      if (this.game.grid.col3.cell3 === color && this.game.grid.col3.cell4 === color
-        && this.game.grid.col3.cell5 === color && this.game.grid.col3.cell6 === color) this.game.colorWinner = color;
-      if (this.game.grid.col4.cell1 === color && this.game.grid.col4.cell2 === color
-        && this.game.grid.col4.cell3 === color && this.game.grid.col4.cell4 === color) this.game.colorWinner = color;
-      if (this.game.grid.col4.cell2 === color && this.game.grid.col4.cell3 === color
-        && this.game.grid.col4.cell4 === color && this.game.grid.col4.cell5 === color) this.game.colorWinner = color;
-      if (this.game.grid.col4.cell3 === color && this.game.grid.col4.cell4 === color
-        && this.game.grid.col4.cell5 === color && this.game.grid.col4.cell6 === color) this.game.colorWinner = color;
-      if (this.game.grid.col5.cell1 === color && this.game.grid.col5.cell2 === color
-        && this.game.grid.col5.cell3 === color && this.game.grid.col5.cell4 === color) this.game.colorWinner = color;
-      if (this.game.grid.col5.cell2 === color && this.game.grid.col5.cell3 === color
-        && this.game.grid.col5.cell4 === color && this.game.grid.col5.cell5 === color) this.game.colorWinner = color;
-      if (this.game.grid.col5.cell3 === color && this.game.grid.col5.cell4 === color
-        && this.game.grid.col5.cell5 === color && this.game.grid.col5.cell6 === color) this.game.colorWinner = color;
-      if (this.game.grid.col6.cell1 === color && this.game.grid.col6.cell2 === color
-        && this.game.grid.col6.cell3 === color && this.game.grid.col6.cell4 === color) this.game.colorWinner = color;
-      if (this.game.grid.col6.cell2 === color && this.game.grid.col6.cell3 === color
-        && this.game.grid.col6.cell4 === color && this.game.grid.col6.cell5 === color) this.game.colorWinner = color;
-      if (this.game.grid.col6.cell3 === color && this.game.grid.col6.cell4 === color
-        && this.game.grid.col6.cell5 === color && this.game.grid.col6.cell6 === color) this.game.colorWinner = color;
-      if (this.game.grid.col7.cell1 === color && this.game.grid.col7.cell2 === color
-        && this.game.grid.col7.cell3 === color && this.game.grid.col7.cell4 === color) this.game.colorWinner = color;
-      if (this.game.grid.col7.cell2 === color && this.game.grid.col7.cell3 === color
-        && this.game.grid.col7.cell4 === color && this.game.grid.col7.cell5 === color) this.game.colorWinner = color;
-      if (this.game.grid.col7.cell3 === color && this.game.grid.col7.cell4 === color
-        && this.game.grid.col7.cell5 === color && this.game.grid.col7.cell6 === color) this.game.colorWinner = color;
-      if (this.game.grid.col1.cell4 === color && this.game.grid.col2.cell3 === color
-        && this.game.grid.col3.cell2 === color && this.game.grid.col4.cell1 === color) this.game.colorWinner = color;
-      if (this.game.grid.col4.cell4 === color && this.game.grid.col3.cell3 === color
-        && this.game.grid.col2.cell2 === color && this.game.grid.col1.cell1 === color) this.game.colorWinner = color;
-      if (this.game.grid.col1.cell5 === color && this.game.grid.col2.cell4 === color
-        && this.game.grid.col3.cell3 === color && this.game.grid.col4.cell2 === color) this.game.colorWinner = color;
-      if (this.game.grid.col4.cell5 === color && this.game.grid.col3.cell4 === color
-        && this.game.grid.col2.cell3 === color && this.game.grid.col1.cell2 === color) this.game.colorWinner = color;
-      if (this.game.grid.col1.cell6 === color && this.game.grid.col2.cell5 === color
-        && this.game.grid.col3.cell4 === color && this.game.grid.col4.cell3 === color) this.game.colorWinner = color;
-      if (this.game.grid.col4.cell6 === color && this.game.grid.col3.cell5 === color
-        && this.game.grid.col2.cell4 === color && this.game.grid.col1.cell3 === color) this.game.colorWinner = color;
-      if (this.game.grid.col2.cell4 === color && this.game.grid.col3.cell3 === color
-        && this.game.grid.col4.cell2 === color && this.game.grid.col5.cell1 === color) this.game.colorWinner = color;
-      if (this.game.grid.col5.cell4 === color && this.game.grid.col4.cell3 === color
-        && this.game.grid.col3.cell2 === color && this.game.grid.col2.cell1 === color) this.game.colorWinner = color;
-      if (this.game.grid.col2.cell5 === color && this.game.grid.col3.cell4 === color
-        && this.game.grid.col4.cell3 === color && this.game.grid.col5.cell2 === color) this.game.colorWinner = color;
-      if (this.game.grid.col5.cell5 === color && this.game.grid.col4.cell4 === color
-        && this.game.grid.col3.cell3 === color && this.game.grid.col2.cell2 === color) this.game.colorWinner = color;
-      if (this.game.grid.col2.cell6 === color && this.game.grid.col3.cell5 === color
-        && this.game.grid.col4.cell4 === color && this.game.grid.col5.cell3 === color) this.game.colorWinner = color;
-      if (this.game.grid.col5.cell6 === color && this.game.grid.col4.cell5 === color
-        && this.game.grid.col3.cell4 === color && this.game.grid.col2.cell3 === color) this.game.colorWinner = color;
-      if (this.game.grid.col3.cell4 === color && this.game.grid.col4.cell3 === color
-        && this.game.grid.col5.cell2 === color && this.game.grid.col6.cell1 === color) this.game.colorWinner = color;
-      if (this.game.grid.col6.cell4 === color && this.game.grid.col5.cell3 === color
-        && this.game.grid.col4.cell2 === color && this.game.grid.col3.cell1 === color) this.game.colorWinner = color;
-      if (this.game.grid.col3.cell5 === color && this.game.grid.col4.cell4 === color
-        && this.game.grid.col5.cell3 === color && this.game.grid.col6.cell2 === color) this.game.colorWinner = color;
-      if (this.game.grid.col6.cell5 === color && this.game.grid.col5.cell4 === color
-        && this.game.grid.col4.cell3 === color && this.game.grid.col3.cell2 === color) this.game.colorWinner = color;
-      if (this.game.grid.col3.cell6 === color && this.game.grid.col4.cell5 === color
-        && this.game.grid.col5.cell4 === color && this.game.grid.col6.cell3 === color) this.game.colorWinner = color;
-      if (this.game.grid.col6.cell6 === color && this.game.grid.col5.cell5 === color
-        && this.game.grid.col4.cell4 === color && this.game.grid.col3.cell3 === color) this.game.colorWinner = color;
-      if (this.game.grid.col4.cell4 === color && this.game.grid.col5.cell3 === color
-        && this.game.grid.col6.cell2 === color && this.game.grid.col7.cell1 === color) this.game.colorWinner = color;
-      if (this.game.grid.col7.cell4 === color && this.game.grid.col6.cell3 === color
-        && this.game.grid.col5.cell2 === color && this.game.grid.col4.cell1 === color) this.game.colorWinner = color;
-      if (this.game.grid.col4.cell5 === color && this.game.grid.col5.cell4 === color
-        && this.game.grid.col6.cell3 === color && this.game.grid.col7.cell2 === color) this.game.colorWinner = color;
-      if (this.game.grid.col7.cell5 === color && this.game.grid.col6.cell4 === color
-        && this.game.grid.col5.cell3 === color && this.game.grid.col4.cell2 === color) this.game.colorWinner = color;
-      if (this.game.grid.col4.cell6 === color && this.game.grid.col5.cell5 === color
-        && this.game.grid.col6.cell4 === color && this.game.grid.col7.cell3 === color) this.game.colorWinner = color;
-      if (this.game.grid.col7.cell6 === color && this.game.grid.col6.cell5 === color
-        && this.game.grid.col5.cell4 === color && this.game.grid.col4.cell3 === color) this.game.colorWinner = color;
     },
   },
 };
@@ -592,7 +487,7 @@ export default {
 <style lang="stylus">
 body
   background-image url('./assets/background.jpg')
-  background-size auto
+  background-size cover
 #gridAndControls
   display flex
   align-items center

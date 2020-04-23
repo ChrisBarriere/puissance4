@@ -107,7 +107,7 @@ export default {
 <!-- eslint-disable -->
 <style lang="stylus" scoped>
 #gameControls
-  width auto
+  width 300px
 #gamePanel
   display flex
   flex-direction column
