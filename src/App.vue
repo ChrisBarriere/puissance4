@@ -87,6 +87,13 @@ import GuestTableConnection from './components/GuestTableConnection.vue';
 import GameControls from './components/GameControls.vue';
 import GridConnect4 from './components/GridConnect4.vue';
 
+const PEERSERVER = {
+  host: 'peerjs.charloup.fr',
+  port: 443,
+  path: '/',
+  secure: true,
+};
+
 export default {
   name: 'App',
   components: {
@@ -131,7 +138,7 @@ export default {
       this.initializePeerMaster();
     },
     initializePeerMaster() {
-      this.peering.peer = new Peer(null, { debug: 2 });
+      this.peering.peer = new Peer(PEERSERVER, { debug: 2 });
       this.peering.peer.on('open', () => {
         if (this.peering.peer.id === null) {
           console.log('Received null id from peer open');
@@ -227,7 +234,7 @@ export default {
       this.initializePeerGuest();
     },
     initializePeerGuest() {
-      this.peering.peer = new Peer(null, { debug: 2 });
+      this.peering.peer = new Peer(PEERSERVER, { debug: 2 });
       this.peering.peer.on('open', () => {
         if (this.peering.peer.id === null) {
           console.log('Received null id from peer open');
